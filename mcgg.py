@@ -1,13 +1,15 @@
 #!/bin/python3
 
+
 import json
+import socket
 import base64
 import discord
 import discord.colour
 from typing import Union
-from discord.ext import commands
 from mcstatus import MinecraftServer
 from discord_slash import SlashCommand
+from discord.ext import commands, tasks
 from discord.errors import DiscordException
 from discord_slash.utils.manage_commands import create_option
 
@@ -19,6 +21,8 @@ lightblue = 0x0096ff
 red = 0xff0000
 green = 0x00c800
 
+version = "1.1.0"
+commandList = {}
 prejson = "prefixes.json"
 
 
@@ -28,9 +32,10 @@ async def get_prefix(client, message):
         prefix = prefixes[str(message.guild.id)]
         return prefixes[str(message.guild.id)]
 
-bot = commands.Bot(command_prefix=get_prefix,
+bot = commands.Bot(command_prefix=get_prefix, help_command=None,
                    case_insensitive=True, intents=discord.Intents.all())
 slash = SlashCommand(bot, sync_commands=True)
+bot.remove_command("help")
 
 
 @bot.event
@@ -102,12 +107,21 @@ async def setprefix(ctx, prefix):
     ]
 )
 @bot.command(name="server")
-async def server(ctx, ip: Union[str, int], port: int = None, l=None):
-    if l:
+async def server(ctx, ip: Union[str, int] = None, port: int = None, sched=None, l=None):
+    """server
+    Returns detailed server info such as its version, online players and protocol.
+    """
+    if not ip:
+        await ctx.send("You need to give an ip!")
+    elif l:
         await ctx.send("This command only takes two arguments (the server ip and port).")
     elif port:
         server = MinecraftServer.lookup(f'{ip}:{port}')
-        olddesc = server.status().description
+        try:
+            olddesc = server.status().description
+        except socket.gaierror:
+            await ctx.send(f'`{ip}:{port}` is not a valid server address!')
+            return 0
         newdesc = list(olddesc)
         for i in newdesc:
             if i == "§":
@@ -136,11 +150,26 @@ async def server(ctx, ip: Union[str, int], port: int = None, l=None):
         em.add_field(name="Players",
                      value=f'Online: `{server.status().players.online}`\nMax: `{server.status().players.max}`', inline=True)
         em.add_field(name="Version",
-                     value=f'Version: `{server.status().version.name}`\nProtocol: `{server.status().version.protocol}`', inline=True)
+                     value=f'Version: {server.status().version.name}\nProtocol: `{server.status().version.protocol}`', inline=True)
         em.set_footer(text="footer to come later")
-        await ctx.send(embed=em, file=img)
+        global message
+        try:
+            if not sched:
+                message = await ctx.send(embed=em, file=img)
+            else:
+                await message.edit(embed=em)
+        except NameError:
+            message = await ctx.send(embed=em, file=img)
+        except discord.errors.NotFound:
+            await ctx.send(embed=em, file=img)
     else:
         server = MinecraftServer.lookup(ip)
+        try:
+            olddesc = server.status().description
+        except socket.gaierror:
+            await ctx.send(f'`{ip}` is not a valid server address!')
+            return 0
+
         b64png = "i" + server.status().favicon.lstrip("data:image/png;base64,")
 
         olddesc = server.status().description
@@ -171,8 +200,39 @@ async def server(ctx, ip: Union[str, int], port: int = None, l=None):
         em.add_field(name="Players",
                      value=f'Online: `{server.status().players.online}`\nMax: `{server.status().players.max}`', inline=True)
         em.add_field(name="Version",
-                     value=f'Version: `{server.status().version.name}`\nProtocol: `{server.status().version.protocol}`', inline=True)
+                     value=f'Version: {server.status().version.name}\nProtocol: `{server.status().version.protocol}`', inline=True)
         em.set_footer(text="footer to come later")
-        await ctx.send(embed=em, file=img)
+        try:
+            if not sched:
+                message = await ctx.send(embed=em, file=img)
+            else:
+                await message.edit(embed=em)
+        except NameError:
+            message = await ctx.send(embed=em, file=img)
+        except discord.errors.NotFound:
+            await ctx.send(embed=em, file=img)
 
+
+@tasks.loop(seconds=5)
+async def schedule(func, a1, a2, a3=None):
+    await func.invoke(a1, a2, a3, True)
+
+
+@bot.command(name="mcscheduleping", aliases=["msp"])
+async def msp(ctx, ip: Union[str, int], port: int = None):
+    """msp
+    pings the given ip and/or port every 5 seconds. (server but scheduled)
+    """
+    if port:
+        try:
+            await schedule.start(func=server, a1=ctx, a2=ip, a3=port)
+        except RuntimeError:
+            schedule.stop()
+    else:
+        try:
+            await schedule.start(func=server, a1=ctx, a2=ip)
+        except RuntimeError:
+            schedule.stop()
+
+bot.load_extension('cogs.Help')
 bot.run(token)
