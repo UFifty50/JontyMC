@@ -1,3 +1,5 @@
 favicons/
 .env
 prefixes.json
+__pycache__/
+*.swp
