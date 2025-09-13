@@ -7,7 +7,7 @@ import base64
 import discord
 import discord.colour
 from typing import Union
-from mcstatus import MinecraftServer
+from mcstatus import JavaServer
 from discord_slash import SlashCommand
 from discord.ext import commands, tasks
 from discord.errors import DiscordException
