@@ -1,4 +1,4 @@
 discord.py==3.0.0
 discord-py-slash-command==1.7.3
 mcstatus
-aiohttp>=3.8.0 # not directly required, pinned by Snyk to avoid a vulnerability
+aiohttp>=3.10.2 # not directly required, pinned by Snyk to avoid a vulnerability
